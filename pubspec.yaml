@@ -1,0 +1,81 @@
+# -----------------------------------------------------------------------------
+# Purpose of This Project
+# -----------------------------------------------------------------------------
+# This Flutter project provides a complete login/signup flow and
+# integrates a quiz system with progress tracking, scoring, and
+# time management features. It uses local storage for persistence,
+# secure token handling for authentication, and a polished UI with
+# Google Fonts and image-based category design.
+# -----------------------------------------------------------------------------
+
+name: loginsignup
+description: "A new Flutter project of basic login signup"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+# flutter: The core Flutter SDK for building the entire app UI and logic.
+  flutter:
+    sdk: flutter
+# http: Handles network requests to your backend (e.g., fetch user data, submit login info).
+  http: ^1.2.2
+# shared_preferences: Stores lightweight user data locally such as name, email, and quiz progress.
+  shared_preferences: ^2.2.3
+# flutter_secure_storage: Securely stores sensitive data like tokens using encryption.
+  flutter_secure_storage: ^9.2.2
+# jwt_decoder: Decodes and verifies JSON Web Tokens to manage user authentication sessions.
+  jwt_decoder: ^2.0.1
+# share_plus: Enables users to share content (e.g., quiz results) via system share dialogs.
+  share_plus: ^10.0.2
+# google_fonts: Provides access to Google Fonts for consistent and stylish typography.
+  google_fonts: ^6.2.1
+# cupertino_icons: Supplies iOS-style icons (used in buttons, navigation, and toolbars).
+  cupertino_icons: ^1.0.8
+# flutter_hooks: Simplifies state handling in widgets with a hook-based approach (optional enhancement).
+  flutter_hooks: ^0.21.3+1
+
+dev_dependencies:
+# flutter_test: Used for writing and running unit and widget tests.
+  flutter_test:
+    sdk: flutter
+# flutter_lints: Applies recommended linting rules for clean and standardized Dart code.flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  #   Images used for displaying quiz categories on the Home screen.
+  assets:
+    - images/signin.png
+    - images/HTML.jpg
+    - images/javascript.jpg
+    - images/react.jpg
+    - images/c++.jpg
+    - images/python.jpg
+
+
+
+# -----------------------------------------------------------------------------
+# Developer Setup Guide
+# -----------------------------------------------------------------------------
+
+# 1. Run the following command to install dependencies:
+#    flutter pub get
+#
+# 2. If there are caching issues or build errors, clean and rebuild:
+#    flutter clean
+#    flutter pub get
+#
+# 3. To run the app on an emulator or connected device:
+#    flutter run
+#
+# 4. If fonts or images are not showing, verify that the asset paths
+#    listed above exist exactly in the "images" folder at project root.
+#
+# 5. To update all packages to their latest compatible versions:
+#    flutter pub upgrade --major-versions
+#
+
