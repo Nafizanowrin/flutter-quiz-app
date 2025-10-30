@@ -4,7 +4,6 @@
 # time management features. It uses local storage for persistence,
 # secure token handling for authentication, and a polished UI with
 # Google Fonts and image-based category design.
-# -----------------------------------------------------------------------------
 
 name: loginsignup
 description: "A new Flutter project of basic login signup"
