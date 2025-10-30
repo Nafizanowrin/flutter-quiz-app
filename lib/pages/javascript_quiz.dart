@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/quiz_score_store.dart';
 import '../services/quiz_progress_store.dart';
+import '../services/sound_player.dart';
 
 class JavascriptQuizPage extends StatefulWidget {
   const JavascriptQuizPage({super.key});
@@ -185,25 +186,41 @@ class _JavascriptQuizPageState extends State<JavascriptQuizPage> with WidgetsBin
 
   // When a user picks an option, record it and reveal correctness
   void _recordSelection(int optionIndex) async {
-    if (_answers[currentIndex] != null) return; // prevent changes after picking once
+    // If this question is already answered, ignore extra taps
+    if (_answers[currentIndex] != null) return;
 
+    // Play a short tap sound; ignore any errors so UI never blocks
+    try {
+      // Assuming you added a small helper like SoundPlayer.click()
+      // If you haven't yet, you can comment this out temporarily.
+      await SoundPlayer.click();
+    } catch (_) {}
+
+    // Save the chosen option and reveal the correct/incorrect coloring
     setState(() {
       selectedIndex = optionIndex;
       _answers[currentIndex] = optionIndex;
       showCorrectAnswer = true;
     });
 
-    // Bump global correct counter for auto-finalize logic elsewhere if needed
+    // Track correct answers for scoring if the choice was right
     if (optionIndex == _questions[currentIndex].answerIndex) {
       await QuizProgressStore.bumpCorrectCount(_topic);
     }
 
+    // Stop the per-question timer and persist progress
     _tick?.cancel();
-    _saveProgress();
+    await _saveProgress();
   }
 
+
   // Button handler to proceed or finish the quiz
-  void _goNextOrFinish() {
+  Future<void> _goNextOrFinish() async {
+    // play click sound for button; ignore any errors so UI never blocks
+    try {
+      await SoundPlayer.click();
+    } catch (_) {}
+
     if (_answers[currentIndex] == null) {
       _answers[currentIndex] = -1;
     }
@@ -212,7 +229,8 @@ class _JavascriptQuizPageState extends State<JavascriptQuizPage> with WidgetsBin
       setState(() {
         currentIndex++;
         selectedIndex = _answers[currentIndex];
-        showCorrectAnswer = _answers[currentIndex] != null && _answers[currentIndex] != -1;
+        showCorrectAnswer =
+            _answers[currentIndex] != null && _answers[currentIndex] != -1;
       });
       _resetTimer();
       _saveProgress();
@@ -220,6 +238,7 @@ class _JavascriptQuizPageState extends State<JavascriptQuizPage> with WidgetsBin
       _finishQuiz();
     }
   }
+
 
   // Finalize: compute score, store results, clear progress, and navigate
   Future<void> _finishQuiz() async {
