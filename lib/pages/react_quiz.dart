@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/quiz_score_store.dart';
 import '../services/quiz_progress_store.dart';
+import '../services/sound_player.dart';
 
 class ReactQuizPage extends StatefulWidget {
   const ReactQuizPage({super.key});
@@ -183,23 +184,41 @@ class _ReactQuizPageState extends State<ReactQuizPage> with WidgetsBindingObserv
 
   // Record user’s answer selection
   void _recordSelection(int optionIndex) async {
+    // If this question is already answered, ignore extra taps
     if (_answers[currentIndex] != null) return;
+
+    // Play a short tap sound; ignore any errors so UI never blocks
+    try {
+      // Assuming you added a small helper like SoundPlayer.click()
+      // If you haven't yet, you can comment this out temporarily.
+      await SoundPlayer.click();
+    } catch (_) {}
+
+    // Save the chosen option and reveal the correct/incorrect coloring
     setState(() {
       selectedIndex = optionIndex;
       _answers[currentIndex] = optionIndex;
       showCorrectAnswer = true;
     });
 
+    // Track correct answers for scoring if the choice was right
     if (optionIndex == _questions[currentIndex].answerIndex) {
       await QuizProgressStore.bumpCorrectCount(_topic);
     }
 
+    // Stop the per-question timer and persist progress
     _tick?.cancel();
-    _saveProgress();
+    await _saveProgress();
   }
 
+
   // Handle next or finish button
-  void _goNextOrFinish() {
+  Future<void> _goNextOrFinish() async {
+    // play click sound for button; ignore any errors so UI never blocks
+    try {
+      await SoundPlayer.click();
+    } catch (_) {}
+
     if (_answers[currentIndex] == null) {
       _answers[currentIndex] = -1;
     }
@@ -208,7 +227,8 @@ class _ReactQuizPageState extends State<ReactQuizPage> with WidgetsBindingObserv
       setState(() {
         currentIndex++;
         selectedIndex = _answers[currentIndex];
-        showCorrectAnswer = _answers[currentIndex] != null && _answers[currentIndex] != -1;
+        showCorrectAnswer =
+            _answers[currentIndex] != null && _answers[currentIndex] != -1;
       });
       _resetTimer();
       _saveProgress();
@@ -216,6 +236,7 @@ class _ReactQuizPageState extends State<ReactQuizPage> with WidgetsBindingObserv
       _finishQuiz();
     }
   }
+
 
   // Complete quiz and record results
   Future<void> _finishQuiz() async {
