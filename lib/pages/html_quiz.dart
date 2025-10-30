@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/quiz_score_store.dart';
 import '../services/quiz_progress_store.dart';
+import '../services/sound_player.dart';
 
 // Purpose : This page manages the full HTML quiz flow for the user. It handles question display, timer countdown, progress saving, automatic advancement, and quiz completion.
 
@@ -176,29 +177,47 @@ class _HtmlQuizPageState extends State<HtmlQuizPage> with WidgetsBindingObserver
     }
   }
 
-  // Handles when user selects an answer
+  // Handles when user selects an answer (with optional click sound)
   void _recordSelection(int optionIndex) async {
+    // If this question is already answered, ignore extra taps
     if (_answers[currentIndex] != null) return;
+
+    // Play a short tap sound; ignore any errors so UI never blocks
+    try {
+      // Assuming you added a small helper like SoundPlayer.click()
+      // If you haven't yet, you can comment this out temporarily.
+      await SoundPlayer.click();
+    } catch (_) {}
+
+    // Save the chosen option and reveal the correct/incorrect coloring
     setState(() {
       selectedIndex = optionIndex;
       _answers[currentIndex] = optionIndex;
       showCorrectAnswer = true;
     });
 
-    // Increment correct counter if correct answer chosen
+    // Track correct answers for scoring if the choice was right
     if (optionIndex == _questions[currentIndex].answerIndex) {
       await QuizProgressStore.bumpCorrectCount(_topic);
     }
 
+    // Stop the per-question timer and persist progress
     _tick?.cancel();
-    _saveProgress();
+    await _saveProgress();
   }
 
-  // Moves to next question or ends quiz if last one
-  void _goNextOrFinish() {
+
+  // Moves to next question or ends quiz if last one (plays a click sound first)
+  Future<void> _goNextOrFinish() async {
+    // play click sound for button; ignore any errors so UI never blocks
+    try {
+      await SoundPlayer.click();
+    } catch (_) {}
+
     if (_answers[currentIndex] == null) {
       _answers[currentIndex] = -1;
     }
+
     if (currentIndex < _questions.length - 1) {
       setState(() {
         currentIndex++;
@@ -212,6 +231,7 @@ class _HtmlQuizPageState extends State<HtmlQuizPage> with WidgetsBindingObserver
       _finishQuiz();
     }
   }
+
 
   // Finalizes quiz, calculates score, and navigates to score screen
   Future<void> _finishQuiz({bool auto = false}) async {
