@@ -26,6 +26,7 @@ flutter pub get
 ```
 ---
 ### Project Structure
+```
 flutter-quiz-app/
 ├── lib/
 │   ├── main.dart                # Entry point
@@ -38,6 +39,6 @@ flutter-quiz-app/
 │   └── questions/               # Question JSON/data files
 ├── pubspec.yaml                 # Dependencies and assets configuration
 └── README.md
-
+```
 
 
