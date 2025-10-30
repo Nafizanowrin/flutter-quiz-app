@@ -10,6 +10,7 @@ import '../services/token_store.dart';
 import '../services/token_expiry_monitor.dart';
 import '../services/quiz_score_store.dart';
 import '../services/quiz_progress_store.dart';
+import '../services/sound_player.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
