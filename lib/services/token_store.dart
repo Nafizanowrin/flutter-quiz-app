@@ -1,8 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
-
-/// This class is responsible for securely saving, retrieving, and validating JWT tokens.
-/// It is used throughout the app to check login status and user identity.
+// This class is responsible for securely saving, retrieving, and validating JWT tokens.
+// It is used throughout the app to check login status and user identity.
 class TokenStore {
   // Creates an instance of FlutterSecureStorage to store data securely on device.
   static const FlutterSecureStorage _storage = FlutterSecureStorage(
@@ -17,27 +16,26 @@ class TokenStore {
   // The key used to store the JWT token.
   static const String _tokenKey = 'jwt_auth_token';
 
-  /// Saves the JWT token securely on the device.
-  /// This keeps the user logged in even after closing the app.
+  // Saves the JWT token securely on the device.
+  // This keeps the user logged in even after closing the app.
   static Future<void> saveToken(String token) async {
     await _storage.write(key: _tokenKey, value: token);
   }
-
-  /// Retrieves the JWT token from secure storage.
-  /// Returns null if no token has been saved.
+  // Retrieves the JWT token from secure storage.
+  // Returns null if no token has been saved.
   static Future<String?> getToken() async {
     return await _storage.read(key: _tokenKey);
   }
 
-  /// Deletes the saved JWT token.
-  /// Called when the user logs out or the token is invalid.
+  // Deletes the saved JWT token.
+  // Called when the user logs out or the token is invalid.
   static Future<void> removeToken() async {
     await _storage.delete(key: _tokenKey);
   }
 
-  /// Checks if a valid JWT token exists.
-  /// Returns true if token is present and not expired.
-  /// Also applies a 24-hour maximum lifetime limit for safety.
+  // Checks if a valid JWT token exists.
+  // Returns true if token is present and not expired.
+  // Also applies a 24-hour maximum lifetime limit for safety.
   static Future<bool> hasValidToken() async {
     final token = await getToken();
     if (token == null) return false;
@@ -87,8 +85,7 @@ class TokenStore {
     return tokenData?['id'] as String?;
   }
 
-  /// Returns the expiry date of the token in a readable format.
-  /// Example: "29/10/2025 14:30"
+  // Returns the expiry date of the token in a readable format.
   static Future<String?> getTokenExpiryDate() async {
     final tokenData = await getTokenData();
     if (tokenData == null) return null;
@@ -119,8 +116,7 @@ class TokenStore {
     }
   }
 
-  /// Returns the issue date of the token in a readable format.
-  /// Example: "29/10/2025 13:45"
+  // Returns the issue date of the token in a readable format.
   static Future<String?> getTokenIssuedDate() async {
     final tokenData = await getTokenData();
     if (tokenData == null) return null;
@@ -137,8 +133,8 @@ class TokenStore {
     }
   }
 
-  /// Checks if the token is going to expire within the next 5 minutes.
-  /// Helps to refresh or re-login before it becomes invalid.
+  // Checks if the token is going to expire within minutes.
+  // Helps to refresh or re-login before it becomes invalid.
   static Future<bool> isTokenExpiringSoon() async {
     final token = await getToken();
     if (token == null) return true;
