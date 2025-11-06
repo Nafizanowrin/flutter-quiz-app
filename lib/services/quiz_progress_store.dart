@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-
 /// Stores and restores in-progress quiz state on the device.
 /// Used by quiz pages to resume where the user left off and to
 /// enforce a single global countdown across all quizzes.
@@ -12,7 +11,6 @@ class QuizProgressStore {
   /// - topic: quiz name (e.g., "HTML")
   /// - currentIndex: which question the user is on
   /// - answers: user selections; null = untouched, -1 = missed by timeout
-  /// Extras:
   /// - remainingSeconds: seconds left on the per-question timer
   /// - lastSavedAtMillis: when we saved (for reference/diagnostics)
   /// - penalties: how many timeout penalties so far
@@ -85,21 +83,19 @@ class QuizProgressStore {
         .toList();
   }
 
-  /// Quick check: does this topic have saved progress?
+  /// Quick check for saved progress?
   static Future<bool> hasProgress(String topic) async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.containsKey('progress_$topic');
   }
 
   /// Read the global deadline (shared timer across all quizzes), in millis.
-  /// Returns null if not started yet.
   static Future<int?> getGlobalDeadlineMillis() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_globalDeadlineKey);
   }
 
   /// Start the global deadline if it isn't running, or return existing one.
-  /// `hours` can be a fraction (e.g., 0.5 = 30 minutes).
   static Future<int> getOrStartGlobalDeadlineMillis({required double hours}) async {
     final prefs = await SharedPreferences.getInstance();
     final existing = prefs.getInt(_globalDeadlineKey);
@@ -141,13 +137,13 @@ class QuizProgressStore {
   }
 
   /// Save total time taken (in seconds) to finish a quiz.
-  /// Used for showing duration in "Recent Activity" or results.
+  /// Used for showing duration in Recent Activity
   static Future<void> saveTimeTaken(String topic, int seconds) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('time_taken_$topic', seconds);
   }
 
-  /// Read total time taken in seconds for a topic, if available.
+  /// Read total time taken in seconds for a topic
   static Future<int?> getTimeTakenSeconds(String topic) async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt('time_taken_$topic');
