@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
-
 // Purpose: This class helps store and fetch quiz scores using SharedPreferences.
 // Each topic (like HTML, JavaScript, React) is saved with its score and total.
 class QuizScoreStore {
@@ -83,6 +82,55 @@ class QuizScoreStore {
 
     return '$score/$total';
   }
+
+  // ---------- Attempt History (append-only) ----------
+
+  /// Append a finished attempt to history (newest-first).
+  static Future<void> saveAttempt(
+      String topic,
+      int score,
+      int total, {
+        required int finishedAtMillis,
+        required int takenSeconds,
+        required bool timedOut,
+      }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'quiz_history_$topic';
+      final List<String> list = prefs.getStringList(key) ?? [];
+      final entry = jsonEncode({
+        'score': score,
+        'total': total,
+        'at': finishedAtMillis, // epoch millis
+        'secs': takenSeconds,   // duration in seconds
+        'timedOut': timedOut,   // true if auto-finalized
+      });
+      // newest first
+      list.insert(0, entry);
+      await prefs.setStringList(key, list);
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  /// Read the most recent attempts for a topic (default up to 5).
+  static Future<List<Map<String, dynamic>>> getAttempts(String topic, {int limit = 5}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'quiz_history_$topic';
+      final List<String> list = prefs.getStringList(key) ?? [];
+      final out = <Map<String, dynamic>>[];
+      for (final s in list.take(limit)) {
+        try {
+          final m = jsonDecode(s) as Map<String, dynamic>;
+          out.add(m);
+        } catch (_) {}
+      }
+      return out;
+    } catch (_) {
+      return [];
+    }
+  }
 }
 
 // Functionality:  saves a score with topic, total, and time of completion.
@@ -90,11 +138,11 @@ class QuizScoreStore {
 // - getAllScores(): gets all saved topics and their scores.
 // - clearAllScores(): deletes all saved score data.
 // - getFormattedScore(): shows score in "score/total" format for display.
-
+//
 // used:
 // - In the quiz pages to save results after a quiz finishes.
 // - In the home or score summary pages to show past scores.
-
+//
 // SharedPreferences:
 // - Works like simple local key-value storage.
 // - Saves small data on the user’s device (no internet needed).
