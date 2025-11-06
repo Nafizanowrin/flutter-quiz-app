@@ -36,7 +36,7 @@ class AuthService {
       try {
         data = jsonDecode(res.body) as Map<String, dynamic>;
       } catch (_) {
-        // If JSON parsing fails, continue with empty data
+        
       }
 
       // Handle successful login (status 200)
