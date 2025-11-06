@@ -7,7 +7,7 @@ class TokenExpiryMonitor {
   static Timer? _timer;
 
   // We store a BuildContext so we can show dialogs and navigate.
-  // This should be a context that stays alive while monitoring (e.g., a page).
+  // This should be a context that stays alive while monitoring.
   static BuildContext? _context;
 
   /// Starts the background check. Call this once (e.g., in a page's initState).
@@ -18,7 +18,6 @@ class TokenExpiryMonitor {
       await _checkExpiry();
     });
   }
-
   /// Stops the background check. Call this when the page is disposed
   /// or when you log out, to avoid running checks unnecessarily.
   static void stopMonitoring() {
