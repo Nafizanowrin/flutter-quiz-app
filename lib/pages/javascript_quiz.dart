@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/quiz_score_store.dart';
 import '../services/quiz_progress_store.dart';
 import '../services/sound_player.dart';
+import 'package:flutter/services.dart';
 
 class JavascriptQuizPage extends StatefulWidget {
   const JavascriptQuizPage({super.key});
@@ -12,7 +13,6 @@ class JavascriptQuizPage extends StatefulWidget {
 }
 
 class _JavascriptQuizPageState extends State<JavascriptQuizPage> with WidgetsBindingObserver {
-  // Topic key used for saving and loading progress
   static const String _topic = 'JavaScript';
 
   // Quiz state for current question and selection
@@ -49,7 +49,7 @@ class _JavascriptQuizPageState extends State<JavascriptQuizPage> with WidgetsBin
     super.dispose();
   }
 
-  // Save progress when app is backgrounded or interrupted
+  // Save progress 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
@@ -90,7 +90,7 @@ class _JavascriptQuizPageState extends State<JavascriptQuizPage> with WidgetsBin
         }
       }
 
-      // Clamp current index into valid range
+      // current index into valid range
       if (idx < 0) idx = 0;
       if (idx >= _questions.length) idx = _questions.length - 1;
 
@@ -180,47 +180,47 @@ class _JavascriptQuizPageState extends State<JavascriptQuizPage> with WidgetsBin
       _startTimer();
       _saveProgress();
     } else {
-      _finishQuiz();
+      // finishing due to timeout on last question 
+      _finishQuiz(auto: true);
     }
   }
 
-  // When a user picks an option, record it and reveal correctness
+  // Handles when user selects an answer (plays correct/wrong sound)
   void _recordSelection(int optionIndex) async {
-    // If this question is already answered, ignore extra taps
     if (_answers[currentIndex] != null) return;
 
-    // Play a short tap sound; ignore any errors so UI never blocks
+    // Determine if answer is correct
+    final isCorrect = optionIndex == _questions[currentIndex].answerIndex;
+
     try {
-      // Assuming you added a small helper like SoundPlayer.click()
-      // If you haven't yet, you can comment this out temporarily.
-      await SoundPlayer.click();
+      // Play sound depending on correctness
+      if (isCorrect) {
+        await SoundPlayer.correct();
+      } else {
+        await SoundPlayer.wrong();
+      }
+
+      // Add haptic feedback right after sound
+      HapticFeedback.lightImpact();
     } catch (_) {}
 
-    // Save the chosen option and reveal the correct/incorrect coloring
+    // Update UI and store progress
     setState(() {
       selectedIndex = optionIndex;
       _answers[currentIndex] = optionIndex;
       showCorrectAnswer = true;
     });
 
-    // Track correct answers for scoring if the choice was right
-    if (optionIndex == _questions[currentIndex].answerIndex) {
+    if (isCorrect) {
       await QuizProgressStore.bumpCorrectCount(_topic);
     }
 
-    // Stop the per-question timer and persist progress
     _tick?.cancel();
     await _saveProgress();
   }
 
-
   // Button handler to proceed or finish the quiz
   Future<void> _goNextOrFinish() async {
-    // play click sound for button; ignore any errors so UI never blocks
-    try {
-      await SoundPlayer.click();
-    } catch (_) {}
-
     if (_answers[currentIndex] == null) {
       _answers[currentIndex] = -1;
     }
@@ -239,9 +239,8 @@ class _JavascriptQuizPageState extends State<JavascriptQuizPage> with WidgetsBin
     }
   }
 
-
   // Finalize: compute score, store results, clear progress, and navigate
-  Future<void> _finishQuiz() async {
+  Future<void> _finishQuiz({bool auto = false}) async {
     _tick?.cancel();
 
     // Save total time taken for this attempt
@@ -262,6 +261,19 @@ class _JavascriptQuizPageState extends State<JavascriptQuizPage> with WidgetsBin
 
     await QuizScoreStore.saveScore(_topic, score, _questions.length);
     await QuizProgressStore.saveTimeTaken(_topic, totalTakenSec);
+
+    // add record attempt for history (normal or timed-out)
+    await QuizScoreStore.saveAttempt(
+      _topic,
+      score,
+      _questions.length,
+      finishedAtMillis: endMillis,
+      takenSeconds: totalTakenSec,
+      timedOut: auto,
+    );
+
+    // Mark finished, then clear progress
+    await QuizProgressStore.markFinished(_topic, 0);
     await QuizProgressStore.clearProgress(_topic);
 
     if (!mounted) return;
@@ -324,7 +336,7 @@ class _JavascriptQuizPageState extends State<JavascriptQuizPage> with WidgetsBin
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
+                      color: Colors.black.withValues(alpha: 0.12),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
@@ -374,7 +386,7 @@ class _JavascriptQuizPageState extends State<JavascriptQuizPage> with WidgetsBin
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
-                    onPressed: null, // previous disabled in this flow
+                    onPressed: null, // disabled previous option
                     child: const Text('Previous'),
                   ),
                 ),
@@ -450,7 +462,7 @@ class _OptionItem extends StatelessWidget {
           decoration: BoxDecoration(
             color: backgroundColor,
             borderRadius: BorderRadius.circular(8),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, 4))],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, 4))],
             border: Border.all(color: Colors.black12),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
