@@ -17,11 +17,6 @@ class _SignUpPageState extends State<SignUpPage> {
   // Boolean used to manage loading state when signup is processing
   bool _loading = false;
 
-  // Main signup logic
-  // 1. Validates that all inputs are filled
-  // 2. Checks that passwords match
-  // 3. Shows feedback message
-  // 4. Currently placeholder for API call
   Future<void> _handleSignup() async {
     final username = _usernameController.text.trim();
     final email = _emailController.text.trim();
@@ -67,7 +62,7 @@ class _SignUpPageState extends State<SignUpPage> {
     super.dispose();
   }
 
-  // Uses light purple background, icons, and rounded edges for a friendly form style
+  // Uses background, icons, and rounded edges for a friendly form style
   InputDecoration _createInputDecoration({
     required String hint,
     required IconData icon,
