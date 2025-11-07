@@ -34,6 +34,8 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   audioplayers: ^6.0.0
+  fluttertoast: ^8.2.6
+
 
   # flutter_hooks: Simplifies state handling in widgets with a hook-based approach (optional enhancement).
   flutter_hooks: ^0.21.3+1
@@ -44,10 +46,10 @@ dev_dependencies:
     sdk: flutter
 # flutter_lints: Applies recommended linting rules for clean and standardized Dart code.flutter_lints: ^5.0.0
 
+  flutter_launcher_icons: ^0.13.1
+
 flutter:
   uses-material-design: true
-
-  #   Images used for displaying quiz categories on the Home screen.
   assets:
     - images/signin.png
     - images/HTML.jpg
@@ -55,24 +57,40 @@ flutter:
     - images/react.jpg
     - images/c++.jpg
     - images/python.jpg
-    - assets/sounds/click.mp3
+    - images/cat.jpg
+    - sounds/click.mp3
+    - sounds/correct.mp3
+    - sounds/wrong.mp3
+    - sounds/party.mp3
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: icons/quiz.png
+
+  # better Android 8+ adaptive icon support
+  adaptive_icon_background: "#FFFFFF"   # bg image
+  adaptive_icon_foreground: icons/quiz.png
+
+  # iOS fix if your PNG has transparency
+  remove_alpha_ios: true
 
 
 
 # 1. Run the following command to install dependencies:
 #    flutter pub get
-#
+
 # 2. If there are caching issues or build errors, clean and rebuild:
 #    flutter clean
 #    flutter pub get
-#
+
 # 3. To run the app on an emulator or connected device:
 #    flutter run
-#
+
 # 4. If fonts or images are not showing, verify that the asset paths
 #    listed above exist exactly in the "images" folder at project root.
-#
+
 # 5. To update all packages to their latest compatible versions:
 #    flutter pub upgrade --major-versions
-#
+ 
 
