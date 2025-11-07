@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/quiz_score_store.dart';
 import '../services/quiz_progress_store.dart';
 import '../services/sound_player.dart';
+import 'package:flutter/services.dart';
 
 class ReactQuizPage extends StatefulWidget {
   const ReactQuizPage({super.key});
@@ -12,10 +13,9 @@ class ReactQuizPage extends StatefulWidget {
 }
 
 class _ReactQuizPageState extends State<ReactQuizPage> with WidgetsBindingObserver {
-  // Topic key for saving and loading progress
   static const String _topic = 'React';
 
-  // Quiz state: current question index and selected answer index
+  // current question index and selected answer index
   int currentIndex = 0;
   int? selectedIndex;
   bool showCorrectAnswer = false;
@@ -90,7 +90,7 @@ class _ReactQuizPageState extends State<ReactQuizPage> with WidgetsBindingObserv
         }
       }
 
-      // Clamp saved index into valid range
+      // saved index into valid range
       if (idx < 0) idx = 0;
       if (idx >= _questions.length) idx = _questions.length - 1;
 
@@ -178,47 +178,46 @@ class _ReactQuizPageState extends State<ReactQuizPage> with WidgetsBindingObserv
       _startTimer();
       _saveProgress();
     } else {
-      _finishQuiz();
+      // timeout on last question
+      _finishQuiz(auto: true);
     }
   }
 
-  // Record user’s answer selection
+  // Handles when user selects an answer (plays correct/wrong sound)
   void _recordSelection(int optionIndex) async {
-    // If this question is already answered, ignore extra taps
     if (_answers[currentIndex] != null) return;
 
-    // Play a short tap sound; ignore any errors so UI never blocks
+    // Determine if answer is correct
+    final isCorrect = optionIndex == _questions[currentIndex].answerIndex;
+
     try {
-      // Assuming you added a small helper like SoundPlayer.click()
-      // If you haven't yet, you can comment this out temporarily.
-      await SoundPlayer.click();
+      // Play sound depending on correctness
+      if (isCorrect) {
+        await SoundPlayer.correct();
+      } else {
+        await SoundPlayer.wrong();
+      }
+      // Add haptic feedback right after sound
+      HapticFeedback.lightImpact();
     } catch (_) {}
 
-    // Save the chosen option and reveal the correct/incorrect coloring
+    // Update UI and store progress
     setState(() {
       selectedIndex = optionIndex;
       _answers[currentIndex] = optionIndex;
       showCorrectAnswer = true;
     });
 
-    // Track correct answers for scoring if the choice was right
-    if (optionIndex == _questions[currentIndex].answerIndex) {
+    if (isCorrect) {
       await QuizProgressStore.bumpCorrectCount(_topic);
     }
 
-    // Stop the per-question timer and persist progress
     _tick?.cancel();
     await _saveProgress();
   }
 
-
-  // Handle next or finish button
+  // Moves to next question or ends quiz if last one
   Future<void> _goNextOrFinish() async {
-    // play click sound for button; ignore any errors so UI never blocks
-    try {
-      await SoundPlayer.click();
-    } catch (_) {}
-
     if (_answers[currentIndex] == null) {
       _answers[currentIndex] = -1;
     }
@@ -237,9 +236,8 @@ class _ReactQuizPageState extends State<ReactQuizPage> with WidgetsBindingObserv
     }
   }
 
-
   // Complete quiz and record results
-  Future<void> _finishQuiz() async {
+  Future<void> _finishQuiz({bool auto = false}) async {
     _tick?.cancel();
     final endMillis = DateTime.now().millisecondsSinceEpoch;
     final totalTakenSec = ((endMillis - (_startMillis ?? endMillis)) / 1000).round();
@@ -257,6 +255,19 @@ class _ReactQuizPageState extends State<ReactQuizPage> with WidgetsBindingObserv
 
     await QuizScoreStore.saveScore(_topic, score, _questions.length);
     await QuizProgressStore.saveTimeTaken(_topic, totalTakenSec);
+
+    // record attempt for history
+    await QuizScoreStore.saveAttempt(
+      _topic,
+      score,
+      _questions.length,
+      finishedAtMillis: endMillis,
+      takenSeconds: totalTakenSec,
+      timedOut: auto,
+    );
+
+    // Mark finished, then clear progress
+    await QuizProgressStore.markFinished(_topic, 0);
     await QuizProgressStore.clearProgress(_topic);
 
     if (!mounted) return;
@@ -309,7 +320,7 @@ class _ReactQuizPageState extends State<ReactQuizPage> with WidgetsBindingObserv
               ),
             ),
 
-            // Main quiz card containing question and answers
+            // Main quiz card for containing question and answers
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Container(
@@ -317,7 +328,7 @@ class _ReactQuizPageState extends State<ReactQuizPage> with WidgetsBindingObserv
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 20, offset: const Offset(0, 10)),
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 20, offset: const Offset(0, 10)),
                   ],
                 ),
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
@@ -441,7 +452,7 @@ class _OptionItem extends StatelessWidget {
           decoration: BoxDecoration(
             color: backgroundColor,
             borderRadius: BorderRadius.circular(8),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, 4))],
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, 4))],
             border: Border.all(color: Colors.black12),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
