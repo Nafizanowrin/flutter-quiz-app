@@ -36,12 +36,6 @@ class _ProfilePageState extends State<ProfilePage> {
     _loadProfile();
   }
 
-  // Loads the user's profile from the server
-  // 1. Checks if token is valid
-  // 2. If valid, fetches user data using AuthService
-  // 3. Saves name and email for later use (e.g. drawer)
-  // 4. Updates the UI with loaded data
-  // 5. If token is invalid, redirects to login
   Future<void> _loadProfile() async {
     try {
       final hasToken = await TokenStore.hasValidToken();
@@ -57,7 +51,7 @@ class _ProfilePageState extends State<ProfilePage> {
       final expiryDate = await TokenStore.getTokenExpiryDate();
       final issuedDate = await TokenStore.getTokenIssuedDate();
 
-      // Make authenticated request to "me" endpoint
+      // Make authenticated request to 'me' endpoint
       final res = await AuthService.makeAuthenticatedRequest(
         url: ApiEndpoints.me,
         method: 'GET',
@@ -102,7 +96,7 @@ class _ProfilePageState extends State<ProfilePage> {
         });
       }
     } catch (e) {
-      // Catch any unexpected error (network, parsing, etc.)
+      // Catch any unexpected error like network, parsing, etc
       setState(() {
         _error = 'Error: $e';
         _loading = false;
@@ -134,8 +128,6 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   // Builds the user profile display section
-  // This part shows name, email, avatar, role, status,
-  // and additional information like token details and login history.
   Widget _buildProfile() {
     final name = (_user?['fullName'] ?? _user?['firstName'] ?? 'User').toString();
     final email = (_user?['email'] ?? '').toString();
@@ -426,7 +418,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // Converts ISO datetime string to readable local format (YYYY-MM-DD HH:mm)
+  // Converts ISO datetime string to readable local format (year-month-date Hr:min)
   String _formatIso(String iso) {
     try {
       final dt = DateTime.parse(iso).toLocal();
