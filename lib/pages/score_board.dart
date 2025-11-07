@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../config/api_endpoints.dart';
 import '../services/auth_service.dart';
+import '../services/sound_player.dart';
 
-/// ScoreBoardPage
 /// Shows the final score after finishing a quiz.
 /// Pulls the user's name for a friendly message and supports sharing the result.
 class ScoreBoardPage extends StatefulWidget {
@@ -23,12 +23,19 @@ class _ScoreBoardPageState extends State<ScoreBoardPage> {
   @override
   void initState() {
     super.initState();
-    // Load user name as soon as the screen opens
     _fetchUserName();
+
+    // Play celebration sound when score page opens
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await SoundPlayer.party();
+      } catch (_) {
+        // Ignore sound errors
+      }
+    });
   }
 
-  // Fetches the current user's name from the authenticated /me endpoint
-  // If anything is missing, defaults to "User"
+  // Fetches the current user's name from the authenticated endpoint
   Future<void> _fetchUserName() async {
     final res = await AuthService.makeAuthenticatedRequest(
       url: ApiEndpoints.me,
@@ -62,7 +69,7 @@ class _ScoreBoardPageState extends State<ScoreBoardPage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        // Back to previous screen
+        // add function for Back to previous screen
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
@@ -123,7 +130,7 @@ class _Content extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // Friendly headline
+            // headline
             Text(
               'Congratulations',
               style: TextStyle(
@@ -135,7 +142,7 @@ class _Content extends StatelessWidget {
 
             const SizedBox(height: 8),
 
-            // Personalized message with topic name
+            // customized message with username
             Text(
               'Great job, $userName! You did it in $topic',
               textAlign: TextAlign.center,
@@ -175,7 +182,7 @@ class _Content extends StatelessWidget {
 }
 
 /// Circular score display widget
-/// Shows a colored circle with "Your Score" and the score fraction
+/// Shows a colored circle with Score and fraction
 class _ScoreCircle extends StatelessWidget {
   const _ScoreCircle({required this.score, required this.total});
   final int score;
