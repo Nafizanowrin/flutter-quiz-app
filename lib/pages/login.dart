@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import '../services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
@@ -9,66 +10,72 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // Controllers store text input from the email and password fields
+  // Controllers store txt input from the email and password fields
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
   // Boolean used to manage loading state (true when waiting for login to complete)
   bool _loading = false;
-
-  // Handles the main login process
-  // 1. Validates email and password are not empty
-  // 2. Calls AuthService().login(email, password)
-  // 3. Shows success or error message
-  // 4. Navigates to home on success
   Future<void> _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    // 1. Ensure both fields are filled
     if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter email and password')),
+      Fluttertoast.showToast(
+        msg: 'Please enter email and password',
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.purple,
+        textColor: Colors.white,
+        fontSize: 16.0,
       );
       return;
     }
 
-    // 2. Start loading indicator
     setState(() => _loading = true);
 
     try {
-      // 3. Create instance of AuthService to handle API request
       final auth = AuthService();
-
-      // 4. Send credentials to server for validation
       final res = await auth.login(email, password);
 
-      // 5. If login success (ok == true)
       if (res['ok'] == true) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res['message'] ?? 'Logged in successfully')),
+        Fluttertoast.showToast(
+          msg: res['message'] ?? 'Logged in successfully',
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+          fontSize: 16.0,
         );
-        // Navigate to home screen
         Navigator.pushReplacementNamed(context, '/home');
       } else {
-        // 6. Handle failed login (wrong password or invalid credentials)
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res['message'].toString())),
+        Fluttertoast.showToast(
+          msg: res['message'].toString(),
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+          fontSize: 16.0,
         );
       }
     } catch (e) {
-      // 7. Catch connection or unexpected errors
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Connection error: $e')),
+      Fluttertoast.showToast(
+        msg: 'Connection error: $e',
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+        fontSize: 16.0,
       );
+
     } finally {
-      // 8. Always remove loading spinner at the end
       if (mounted) setState(() => _loading = false);
     }
   }
+
 
   @override
   void dispose() {
@@ -79,7 +86,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   // Creates a reusable input decoration with consistent look for text fields
-  // Includes light purple background, prefix icon, and rounded corners
+  // Includes light purple bg, prefix icon, and rounded corners
   InputDecoration _createInputDecoration({
     required String hint,
     required IconData icon,
@@ -101,19 +108,19 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       // App bar at the top with title and back button
-      appBar: AppBar(
-        backgroundColor: Colors.purple,
-        title: const Text('Login'),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
+      //appBar: AppBar(
+        //backgroundColor: Colors.purple,
+        //title: const Text('Login'),
+       // centerTitle: true,
+       // leading: IconButton(
+         // icon: const Icon(Icons.arrow_back),
+          //onPressed: () => Navigator.pop(context),
+        //),
+      //),
 
       // Main body section of the login page
       body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.fromLTRB(20, 40, 20, 0),
         child: Center(
           child: SingleChildScrollView(
             child: Column(
@@ -177,10 +184,9 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 10),
 
-                // Placeholder for "Forgot password" (can be implemented later)
+                // Placeholder for Forgot password (can be implemented later)
                 TextButton(
                   onPressed: () {
-                    // Future implementation can go here
                   },
                   style: TextButton.styleFrom(foregroundColor: Colors.purple),
                   child: const Text('Forgot password?'),
