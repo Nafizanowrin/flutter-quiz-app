@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/quiz_score_store.dart';
 import '../services/quiz_progress_store.dart';
 import '../services/sound_player.dart';
+import 'package:flutter/services.dart';
 
 // Purpose : This page manages the full HTML quiz flow for the user. It handles question display, timer countdown, progress saving, automatic advancement, and quiz completion.
 
@@ -46,7 +47,7 @@ class _HtmlQuizPageState extends State<HtmlQuizPage> with WidgetsBindingObserver
     super.dispose();
   }
 
-  // Automatically save progress if app goes background
+  // Automatically save progress if app goes bg
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
@@ -54,7 +55,7 @@ class _HtmlQuizPageState extends State<HtmlQuizPage> with WidgetsBindingObserver
     }
   }
 
-  // Load saved progress if user previously left quiz midway
+  // Load saved progress if user previously left quiz in the middle 
   Future<void> _loadSavedProgress() async {
     final full = await QuizProgressStore.loadProgressFull(_topic);
     if (full != null) {
@@ -117,7 +118,7 @@ class _HtmlQuizPageState extends State<HtmlQuizPage> with WidgetsBindingObserver
     });
   }
 
-  // Save quiz progress locally (called periodically or when user exits)
+  // Save quiz progress locally 
   Future<void> _saveProgress() async {
     await QuizProgressStore.getOrStartGlobalDeadlineMillis(hours: 0.5);
     await QuizProgressStore.saveProgress(
@@ -177,43 +178,42 @@ class _HtmlQuizPageState extends State<HtmlQuizPage> with WidgetsBindingObserver
     }
   }
 
-  // Handles when user selects an answer (with optional click sound)
+  // Handles when user selects an answer (plays correct/wrong sound)
   void _recordSelection(int optionIndex) async {
-    // If this question is already answered, ignore extra taps
     if (_answers[currentIndex] != null) return;
 
-    // Play a short tap sound; ignore any errors so UI never blocks
+    // Determine if answer is correct
+    final isCorrect = optionIndex == _questions[currentIndex].answerIndex;
+
     try {
-      // Assuming you added a small helper like SoundPlayer.click()
-      // If you haven't yet, you can comment this out temporarily.
-      await SoundPlayer.click();
+      // Play sound depending on correctness
+      if (isCorrect) {
+        await SoundPlayer.correct();
+      } else {
+        await SoundPlayer.wrong();
+      }
+
+      // Add haptic feedback right after sound
+      HapticFeedback.lightImpact();
     } catch (_) {}
 
-    // Save the chosen option and reveal the correct/incorrect coloring
+    // Update UI and store progress
     setState(() {
       selectedIndex = optionIndex;
       _answers[currentIndex] = optionIndex;
       showCorrectAnswer = true;
     });
 
-    // Track correct answers for scoring if the choice was right
-    if (optionIndex == _questions[currentIndex].answerIndex) {
+    if (isCorrect) {
       await QuizProgressStore.bumpCorrectCount(_topic);
     }
 
-    // Stop the per-question timer and persist progress
     _tick?.cancel();
     await _saveProgress();
   }
 
-
-  // Moves to next question or ends quiz if last one (plays a click sound first)
+  // Moves to next question or ends quiz if last one
   Future<void> _goNextOrFinish() async {
-    // play click sound for button; ignore any errors so UI never blocks
-    try {
-      await SoundPlayer.click();
-    } catch (_) {}
-
     if (_answers[currentIndex] == null) {
       _answers[currentIndex] = -1;
     }
@@ -232,10 +232,10 @@ class _HtmlQuizPageState extends State<HtmlQuizPage> with WidgetsBindingObserver
     }
   }
 
-
   // Finalizes quiz, calculates score, and navigates to score screen
   Future<void> _finishQuiz({bool auto = false}) async {
     _tick?.cancel();
+
     final endMillis = DateTime.now().millisecondsSinceEpoch;
     final totalTakenSec = ((endMillis - _startMillis) / 1000).round();
     await QuizProgressStore.saveTimeTaken(_topic, totalTakenSec);
@@ -249,7 +249,22 @@ class _HtmlQuizPageState extends State<HtmlQuizPage> with WidgetsBindingObserver
     }
 
     final score = (correct - _penalties).clamp(0, _questions.length);
+
+    // Save last score (existing behavior)
     await QuizScoreStore.saveScore(_topic, score, _questions.length);
+
+    // add record attempt for history (normal or timed-out)
+    await QuizScoreStore.saveAttempt(
+      _topic,
+      score,
+      _questions.length,
+      finishedAtMillis: endMillis,
+      takenSeconds: totalTakenSec,
+      timedOut: auto,
+    );
+
+    // Mark finished, then clear progress
+    await QuizProgressStore.markFinished(_topic, 0);
     await QuizProgressStore.clearProgress(_topic);
 
     if (!mounted) return;
@@ -316,7 +331,7 @@ class _HtmlQuizPageState extends State<HtmlQuizPage> with WidgetsBindingObserver
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
+                      color: Colors.black.withValues(alpha: 0.12),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
@@ -341,6 +356,9 @@ class _HtmlQuizPageState extends State<HtmlQuizPage> with WidgetsBindingObserver
                     const SizedBox(height: 8),
 
                     // Question count and content
+                    const Text('Question: 20/20',
+                        // Keeping your original label format; the line below shows current question
+                        style: TextStyle(fontSize: 0)), // Hidden (placeholder to avoid UI shift)
                     Text('Question: ${currentIndex + 1}/20',
                         style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w600)),
@@ -458,9 +476,10 @@ class _OptionItem extends StatelessWidget {
             border: Border.all(color: Colors.black12),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4))
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              )
             ],
           ),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -667,6 +686,3 @@ const List<_Question> _questions = [
 //    - _goNextOrFinish() : Handles “Next” and “Finish” button actions.
 //    - _finishQuiz() : Calculates total score, stores results, and redirects to scoreboard.
 //    - _saveProgress() / _loadSavedProgress() : Handle saving and restoring progress.
-
-
-
