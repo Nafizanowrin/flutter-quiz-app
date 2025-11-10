@@ -1,4 +1,5 @@
 // Home screen: Displays user info, categories, search, and recent quiz activity.
+// Home screen: Displays user info, categories, search, and recent quiz activity.
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -14,32 +15,26 @@ import '../services/sound_player.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
-
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  // User info
   String _name = 'User';
   String _email = '';
   String _profileImg = '';
   bool _isLoading = true;
 
-  // Search/filter fields
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
   String _activeTag = 'All';
 
-  // Global countdown across quizzes
   Timer? _globalTick;
   int? _globalRemainSec;
 
-  // diamond beige : sum of highest per-topic scores in current token session
   int _sessionHighSum = 0;
   static const List<String> _scorableTopics = ['HTML', 'JavaScript', 'React'];
 
-  // Categories shown at top
   final List<Map<String, dynamic>> _allCategories = [
     {'title': 'HTML', 'tag': 'All', 'image': 'images/HTML.jpg'},
     {'title': 'JavaScript', 'tag': 'All', 'image': 'images/javascript.jpg'},
@@ -48,6 +43,10 @@ class _HomePageState extends State<HomePage> {
     {'title': 'Python', 'tag': 'All', 'image': 'images/python.jpg'},
   ];
 
+  static const int _topicWindowSeconds = 1800; // 30 minutes per quiz
+  Map<String, int> _perTopicEtaSeconds = {};
+  Timer? _perTopicTick;
+
   @override
   void initState() {
     super.initState();
@@ -55,18 +54,19 @@ class _HomePageState extends State<HomePage> {
     _searchCtrl.addListener(() => setState(() => _query = _searchCtrl.text.trim()));
     TokenExpiryMonitor.startMonitoring(context);
     _startGlobalWatcher();
-    _refreshSessionHighSum(); // compute initial header total
+    _refreshSessionHighSum();
+    _startPerTopicTicker();
   }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
     _globalTick?.cancel();
+    _perTopicTick?.cancel();
     TokenExpiryMonitor.stopMonitoring();
     super.dispose();
   }
 
-  // Load user profile from API
   Future<void> _loadProfile() async {
     try {
       final token = await TokenStore.getToken();
@@ -90,7 +90,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // Logout user and clear stored data
   Future<void> _logout(BuildContext context) async {
     try {
       TokenExpiryMonitor.stopMonitoring();
@@ -118,7 +117,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // Navigate to specific quiz route
   void _navigateToQuiz(String categoryTitle) {
     String route;
     switch (categoryTitle.toUpperCase()) {
@@ -140,7 +138,6 @@ class _HomePageState extends State<HomePage> {
     Navigator.pushNamed(context, route);
   }
 
-  // Start and update global countdown
   Future<void> _startGlobalWatcher() async {
     await _updateGlobalRemaining();
     _globalTick?.cancel();
@@ -149,50 +146,38 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  // Compute/refresh the global remaining seconds and auto-finalize when it hits 0
   Future<void> _updateGlobalRemaining() async {
     final deadlineMs = await QuizProgressStore.getGlobalDeadlineMillis();
     if (!mounted) return;
-
     if (deadlineMs == null) {
       setState(() => _globalRemainSec = null);
       return;
     }
-
     final now = DateTime.now().millisecondsSinceEpoch;
     final remain = ((deadlineMs - now) / 1000).ceil();
-
     if (remain <= 0) {
       setState(() => _globalRemainSec = 0);
-      await _autoFinalizeAllExpired(); // finalize any active quizzes
+      await _autoFinalizeAllExpired();
     } else {
       setState(() => _globalRemainSec = remain);
     }
   }
 
-  // Finalize all expired quizzes when time runs out
   Future<void> _autoFinalizeAllExpired() async {
     final topics = await QuizProgressStore.topicsWithProgress();
     if (topics.isEmpty) {
       await QuizProgressStore.clearGlobalDeadline();
       return;
     }
-
     const totals = {'HTML': 20, 'JavaScript': 20, 'React': 20};
-
     for (final t in topics) {
       final full = await QuizProgressStore.loadProgressFull(t);
       if (full == null) continue;
-
       final penalties = full.$5;
       final total = totals[t] ?? 20;
       final correct = await QuizProgressStore.getCorrectCount(t);
       final score = (correct - penalties).clamp(0, total);
-
-      // save the finalized score
       await QuizScoreStore.saveScore(t, score, total);
-
-      // record it in attempt history (timed-out attempt)
       final takenSecs = await QuizProgressStore.getTimeTakenSeconds(t) ?? 0;
       await QuizScoreStore.saveAttempt(
         t,
@@ -202,18 +187,15 @@ class _HomePageState extends State<HomePage> {
         takenSeconds: takenSecs,
         timedOut: true,
       );
-
       await QuizProgressStore.markFinished(t, 0);
       await QuizProgressStore.clearProgress(t);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('topic_startedAt_$t');
     }
-
     await QuizProgressStore.clearGlobalDeadline();
-
-    // After finalizing, recompute the header total
     await _refreshSessionHighSum();
   }
 
-  // Filter categories by search or tag
   List<Map<String, dynamic>> get _visibleCategories {
     final q = _query.toLowerCase();
     const showAllFor = {'All', 'Web', 'Mobile', 'Systems'};
@@ -224,7 +206,6 @@ class _HomePageState extends State<HomePage> {
     }).toList();
   }
 
-  // Format time as short readable txt
   String _fmtHMSShort(int secs) {
     if (secs < 60) return '${secs}s';
     final m = secs ~/ 60;
@@ -235,7 +216,6 @@ class _HomePageState extends State<HomePage> {
     return '${h}h ${rm.toString().padLeft(2, '0')}m';
   }
 
-  // Estimate remaining time for an ongoing quiz
   Future<String> _timeLabelFor(String topic, String fallback) async {
     try {
       final full = await QuizProgressStore.loadProgressFull(topic);
@@ -255,40 +235,33 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // Helpers for history/token window
-
-  // Convert TokenStore outputs (String-int-DateTime) to DateTime
   DateTime? _toDateTime(dynamic raw) {
     if (raw == null) return null;
     if (raw is DateTime) return raw;
-
     if (raw is int) {
-      // treat as epoch seconds or milliseconds
       final ms = raw > 1000000000000 ? raw : raw * 1000;
       return DateTime.fromMillisecondsSinceEpoch(ms);
     }
-
     if (raw is String) {
       final t = raw.trim();
       if (t.isEmpty) return null;
-
-      // numeric string? epoch sec/ms
       final asInt = int.tryParse(t);
       if (asInt != null) {
         final ms = asInt > 1000000000000 ? asInt : asInt * 1000;
         return DateTime.fromMillisecondsSinceEpoch(ms);
       }
-
-      // ISO-8601
-      try { return DateTime.parse(t); } catch (_) { return null; }
+      try {
+        return DateTime.parse(t);
+      } catch (_) {
+        return null;
+      }
     }
-
     return null;
   }
 
   Future<DateTime?> _getTokenIssued() async {
     try {
-      final raw = await TokenStore.getTokenIssuedDate(); // may be String/int/DateTime
+      final raw = await TokenStore.getTokenIssuedDate();
       return _toDateTime(raw);
     } catch (_) {
       return null;
@@ -297,7 +270,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<DateTime?> _getTokenExpiry() async {
     try {
-      final raw = await TokenStore.getTokenExpiryDate(); // may be String/int/DateTime
+      final raw = await TokenStore.getTokenExpiryDate();
       return _toDateTime(raw);
     } catch (_) {
       return null;
@@ -327,14 +300,12 @@ class _HomePageState extends State<HomePage> {
     return '${m}m ${s.toString().padLeft(2, '0')}s';
   }
 
-  // diamond beige: sum of highest scores for each topic within token window
   Future<void> _refreshSessionHighSum() async {
     final issued = await _getTokenIssued();
     final expiry = await _getTokenExpiry();
-
     int sum = 0;
     for (final topic in _scorableTopics) {
-      final attempts = await QuizScoreStore.getAttempts(topic, limit: 200); // newest-first
+      final attempts = await QuizScoreStore.getAttempts(topic, limit: 200);
       int best = 0;
       for (final a in attempts) {
         final atMillis = (a['at'] ?? 0) as int;
@@ -344,11 +315,55 @@ class _HomePageState extends State<HomePage> {
       }
       sum += best;
     }
-
     if (mounted) setState(() => _sessionHighSum = sum);
   }
 
-  // Build complete page layout
+  Future<int> _getOrInitTopicStart(String topic) async {
+    final prefs = await SharedPreferences.getInstance();
+    final k = 'topic_startedAt_$topic';
+    final existing = prefs.getInt(k);
+    if (existing != null) return existing;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await prefs.setInt(k, now);
+    return now;
+  }
+
+  Future<void> _recalcPerTopicEtas() async {
+    final Map<String, int> next = {};
+    for (final it in _allCategories) {
+      final title = it['title'] as String;
+      final has = await QuizProgressStore.hasProgress(title);
+      if (!has) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('topic_startedAt_$title');
+        continue;
+      }
+      final start = await _getOrInitTopicStart(title);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final elapsed = ((now - start) / 1000).floor();
+      final remain = (_topicWindowSeconds - elapsed).clamp(0, _topicWindowSeconds);
+      next[title] = remain;
+    }
+    if (!mounted) return;
+    if (_mapsDiffer(_perTopicEtaSeconds, next)) {
+      setState(() => _perTopicEtaSeconds = next);
+    }
+  }
+
+  bool _mapsDiffer(Map<String, int> a, Map<String, int> b) {
+    if (a.length != b.length) return true;
+    for (final k in b.keys) {
+      if (a[k] != b[k]) return true;
+    }
+    return false;
+  }
+
+  void _startPerTopicTicker() {
+    _perTopicTick?.cancel();
+    _recalcPerTopicEtas();
+    _perTopicTick = Timer.periodic(const Duration(seconds: 1), (_) => _recalcPerTopicEtas());
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -380,7 +395,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Header with avatar, user info, and actions
   Widget _buildHeaderSection() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
@@ -424,7 +438,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Search bar with filter button
   Widget _searchAndFilter() {
     return Row(
       children: [
@@ -469,7 +482,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Filter modal sheet for tags
   void _openFilterSheet() {
     final tags = const [
       {'label': 'All', 'icon': Icons.public},
@@ -477,18 +489,13 @@ class _HomePageState extends State<HomePage> {
       {'label': 'Mobile', 'icon': Icons.smartphone},
       {'label': 'Systems', 'icon': Icons.memory},
     ];
-
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
       isScrollControlled: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) {
-        // keep a temporary selection inside the sheet for UX
         String tempSelection = _activeTag;
-
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
             return SafeArea(
@@ -498,30 +505,17 @@ class _HomePageState extends State<HomePage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // drag handle
                     Center(
                       child: Container(
                         width: 42,
                         height: 4,
                         margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.black12,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+                        decoration: BoxDecoration(color: Colors.black12, borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
-                    // title
-                    Text(
-                      'Filter categories',
-                      style: GoogleFonts.kufam(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.black87,
-                      ),
-                    ),
+                    Text('Filter categories',
+                        style: GoogleFonts.kufam(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.black87)),
                     const SizedBox(height: 12),
-
-                    // big, tappable pills grid
                     Wrap(
                       spacing: 10,
                       runSpacing: 10,
@@ -529,7 +523,6 @@ class _HomePageState extends State<HomePage> {
                         final label = t['label'] as String;
                         final icon = t['icon'] as IconData;
                         final selected = tempSelection == label;
-
                         return InkWell(
                           onTap: () => setSheetState(() => tempSelection = label),
                           borderRadius: BorderRadius.circular(14),
@@ -538,10 +531,7 @@ class _HomePageState extends State<HomePage> {
                             decoration: BoxDecoration(
                               color: selected ? const Color(0xFF0F469A) : const Color(0xFFF3F5F9),
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: selected ? const Color(0xFF0F469A) : Colors.transparent,
-                                width: 1.5,
-                              ),
+                              border: Border.all(color: selected ? const Color(0xFF0F469A) : Colors.transparent, width: 1.5),
                               boxShadow: selected
                                   ? [
                                 BoxShadow(
@@ -559,34 +549,21 @@ class _HomePageState extends State<HomePage> {
                                   width: 28,
                                   height: 28,
                                   decoration: BoxDecoration(
-                                    color: selected ? Colors.white.withValues(alpha: 0.15) : Colors.white,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(
-                                    icon,
-                                    size: 18,
-                                    color: selected ? Colors.white : Colors.black54,
-                                  ),
+                                      color: selected ? Colors.white.withValues(alpha: 0.15) : Colors.white,
+                                      borderRadius: BorderRadius.circular(8)),
+                                  child: Icon(icon, size: 18, color: selected ? Colors.white : Colors.black54),
                                 ),
                                 const SizedBox(width: 10),
-                                Text(
-                                  label,
-                                  style: GoogleFonts.kufam(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: selected ? Colors.white : Colors.black87,
-                                  ),
-                                ),
+                                Text(label,
+                                    style: GoogleFonts.kufam(
+                                        fontSize: 13, fontWeight: FontWeight.w700, color: selected ? Colors.white : Colors.black87)),
                               ],
                             ),
                           ),
                         );
                       }).toList(),
                     ),
-
                     const SizedBox(height: 18),
-
-                    // actions
                     Row(
                       children: [
                         Expanded(
@@ -597,14 +574,9 @@ class _HomePageState extends State<HomePage> {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             ),
                             onPressed: () => setSheetState(() => tempSelection = 'All'),
-                            child: Text(
-                              'Reset',
-                              style: GoogleFonts.kufam(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFF0F469A),
-                              ),
-                            ),
+                            child: Text('Reset',
+                                style: GoogleFonts.kufam(
+                                    fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF0F469A))),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -620,10 +592,7 @@ class _HomePageState extends State<HomePage> {
                               setState(() => _activeTag = tempSelection);
                               Navigator.pop(context);
                             },
-                            child: Text(
-                              'Apply',
-                              style: GoogleFonts.kufam(fontSize: 13, fontWeight: FontWeight.w700),
-                            ),
+                            child: Text('Apply', style: GoogleFonts.kufam(fontSize: 13, fontWeight: FontWeight.w700)),
                           ),
                         ),
                       ],
@@ -638,11 +607,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Display horizontal category list
   Widget _categoriesRow() {
     final items = _visibleCategories;
-
-    // show empty state
     if (items.isEmpty) {
       return Container(
         margin: const EdgeInsets.only(top: 8),
@@ -650,28 +616,14 @@ class _HomePageState extends State<HomePage> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 6))],
         ),
         child: Center(
-          child: Text(
-            'No categories found',
-            style: GoogleFonts.kufam(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.black54,
-            ),
-          ),
+          child: Text('No categories found',
+              style: GoogleFonts.kufam(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black54)),
         ),
       );
     }
-
-    // Normal category row
     return LayoutBuilder(
       builder: (ctx, c) {
         final isSmall = c.maxWidth < 360;
@@ -685,7 +637,7 @@ class _HomePageState extends State<HomePage> {
                 padding: EdgeInsets.only(right: gap),
                 child: GestureDetector(
                   onTap: () async {
-                    await SoundPlayer.click(); // play click sound
+                    await SoundPlayer.click();
                     _navigateToQuiz(cat['title'] as String);
                   },
                   child: Column(
@@ -696,13 +648,7 @@ class _HomePageState extends State<HomePage> {
                         decoration: BoxDecoration(
                           color: const Color(0x45ABC2E3),
                           borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.06),
-                              blurRadius: 10,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 6))],
                         ),
                         padding: const EdgeInsets.all(10),
                         child: Image.asset(cat['image'] as String, fit: BoxFit.contain),
@@ -715,11 +661,7 @@ class _HomePageState extends State<HomePage> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.kufam(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w400,
-                            color: Colors.black,
-                          ),
+                          style: GoogleFonts.kufam(fontSize: 10, fontWeight: FontWeight.w400, color: Colors.black),
                         ),
                       ),
                     ],
@@ -733,7 +675,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // SINGLE CARD
   Widget _topicStyleCard({
     required String title,
     required String image,
@@ -750,10 +691,7 @@ class _HomePageState extends State<HomePage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: borderColor,
-          width: borderColor == Colors.transparent ? 0 : 1.5,
-        ),
+        border: Border.all(color: borderColor, width: borderColor == Colors.transparent ? 0 : 1.5),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 6))],
       ),
       child: Padding(
@@ -788,10 +726,7 @@ class _HomePageState extends State<HomePage> {
                 height: 40,
                 decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: ringColor, width: 3.5)),
                 child: Center(
-                  child: Text(
-                    rightText,
-                    style: GoogleFonts.kufam(fontSize: 10, fontWeight: FontWeight.bold, color: ringColor),
-                  ),
+                  child: Text(rightText, style: GoogleFonts.kufam(fontSize: 10, fontWeight: FontWeight.bold, color: ringColor)),
                 ),
               ),
             ]),
@@ -819,7 +754,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Recent activity showing time and score
   Widget _recentActivitySection() {
     Widget _emptyRecent() {
       return Container(
@@ -828,30 +762,19 @@ class _HomePageState extends State<HomePage> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 6))],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Image.asset('images/cat.jpg', height: 90, width: 90, fit: BoxFit.contain),
             const SizedBox(height: 14),
-            Text(
-              'No Pending or Completed Quiz',
-              style: GoogleFonts.kufam(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black87),
-              textAlign: TextAlign.center,
-            ),
+            Text('No Pending or Completed Quiz',
+                style: GoogleFonts.kufam(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black87),
+                textAlign: TextAlign.center),
             const SizedBox(height: 6),
-            Text(
-              'Start a quiz from the categories above to see it here.',
-              style: GoogleFonts.kufam(fontSize: 12, color: Colors.black54),
-              textAlign: TextAlign.center,
-            ),
+            Text('Start a quiz from the categories above to see it here.',
+                style: GoogleFonts.kufam(fontSize: 12, color: Colors.black54), textAlign: TextAlign.center),
           ],
         ),
       );
@@ -869,29 +792,23 @@ class _HomePageState extends State<HomePage> {
       future: () async {
         final issued = await _getTokenIssued();
         final expiry = await _getTokenExpiry();
-
-        // collect separately to control order
         final List<Widget> continueCards = [];
         final List<Widget> historyCards = [];
 
         for (final it in items) {
           const totalQuestions = 20;
-
           final title = it['title'] as String;
           final image = it['image'] as String;
           final color = it['color'] as Color;
 
-          // progress card
           final hasProgress = await QuizProgressStore.hasProgress(title);
           if (hasProgress) {
             final full = await QuizProgressStore.loadProgressFull(title);
             final answered = ((full?.$1 ?? 0)).clamp(0, totalQuestions);
             final displayAnswered = (answered + 1).clamp(1, totalQuestions);
             final correct = (await QuizProgressStore.getCorrectCount(title)).clamp(0, answered);
-
-            final timeLabel = (_globalRemainSec != null)
-                ? _fmtHMSShort(_globalRemainSec!.clamp(0, 24 * 60 * 60))
-                : await _timeLabelFor(title, '—');
+            final remain = _perTopicEtaSeconds[title];
+            final timeLabel = remain == null ? '—' : _fmtHMSShort(remain);
 
             continueCards.add(
               _topicStyleCard(
@@ -911,12 +828,10 @@ class _HomePageState extends State<HomePage> {
             );
           }
 
-          // Completed history within token window
           final attempts = await QuizScoreStore.getAttempts(title, limit: 50);
           for (final a in attempts) {
             final finishedAt = (a['at'] ?? 0) as int;
             if (!_withinTokenWindow(finishedAt, issued, expiry)) continue;
-
             final score = (a['score'] ?? 0) as int;
             final total = (a['total'] ?? totalQuestions) as int;
             final secs = (a['secs'] ?? 0) as int;
